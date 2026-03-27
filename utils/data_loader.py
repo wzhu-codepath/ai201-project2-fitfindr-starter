@@ -31,7 +31,7 @@ def load_listings() -> list[dict]:
         - platform (str): depop, thredUp, or poshmark
     """
     path = os.path.join(_DATA_DIR, "listings.json")
-    with open(path, "r") as f:
+    with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -46,7 +46,7 @@ def load_wardrobe_schema() -> dict:
         - empty_wardrobe: a starting template for a new user
     """
     path = os.path.join(_DATA_DIR, "wardrobe_schema.json")
-    with open(path, "r") as f:
+    with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
