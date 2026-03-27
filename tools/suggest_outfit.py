@@ -189,6 +189,7 @@ def _llm_pairing_plan(new_item: dict[str, Any], candidates: list[dict[str, Any]]
     load_dotenv()
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
+        print("[suggest_outfit] ❌ No GROQ_API_KEY found - skipping LLM")
         return None
 
     model = "llama-3.3-70b-versatile"
@@ -232,6 +233,7 @@ def _llm_pairing_plan(new_item: dict[str, Any], candidates: list[dict[str, Any]]
     )
 
     try:
+        print("[suggest_outfit] 🤖 Calling LLM to pair outfit...")
         client = Groq(api_key=api_key)
         response = client.chat.completions.create(
             model=model,
@@ -243,11 +245,16 @@ def _llm_pairing_plan(new_item: dict[str, Any], candidates: list[dict[str, Any]]
             max_tokens=500,
         )
         content = response.choices[0].message.content if response.choices else ""
+        print(f"[suggest_outfit] 📝 LLM raw response: {content[:150]}...")
         parsed = _extract_json_object(content)
         if not isinstance(parsed, dict):
+            print("[suggest_outfit] ❌ LLM response was not valid JSON - falling back to deterministic")
             return None
+        print("[suggest_outfit] ✅ LLM response parsed successfully")
+        print(f"[suggest_outfit] 📋 LLM picked item IDs: {parsed.get('paired_item_ids')}")
         return parsed
-    except Exception:
+    except Exception as e:
+        print(f"[suggest_outfit] ❌ LLM request failed: {str(e)}")
         return None
 
 
@@ -304,8 +311,11 @@ def suggest_outfit(new_item: dict, wardrobe: dict) -> dict:
     paired_items: list[dict[str, Any]] = []
     styling_notes: list[str] = []
     confidence: float | None = None
+    used_llm = False
 
     if isinstance(llm_output, dict):
+        print("[suggest_outfit] 🎨 Using LLM-selected items")
+        used_llm = True
         raw_ids = llm_output.get("paired_item_ids", [])
         if isinstance(raw_ids, list):
             for item_id in raw_ids:
@@ -324,15 +334,21 @@ def suggest_outfit(new_item: dict, wardrobe: dict) -> dict:
             confidence = float(raw_confidence)
 
     if not paired_items:
+        print("[suggest_outfit] 🔄 No valid LLM items - using deterministic algorithm")
+        used_llm = False
         paired_items = _select_diverse_candidates(compatibility_pool, limit=4)
 
     if not styling_notes:
+        if not used_llm:
+            print("[suggest_outfit] 📝 Using deterministic styling notes")
         styling_notes = _deterministic_notes(new_item, paired_items)
 
     if confidence is None:
         avg_score = sum(item.get("_compatibility_score", 0.0) for item in paired_items) / max(len(paired_items), 1)
         coverage_boost = min(len({str(i.get("category", "")).lower() for i in paired_items}) * 0.05, 0.15)
         confidence = min(0.55 + (avg_score * 0.35) + coverage_boost, 0.95)
+
+    print(f"[suggest_outfit] ✅ Final outfit confidence: {confidence:.2f} ({'LLM' if used_llm else 'deterministic'})")
 
     clean_paired_items = []
     for item in paired_items:

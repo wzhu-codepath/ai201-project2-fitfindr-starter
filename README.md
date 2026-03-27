@@ -278,3 +278,6 @@ python app.py
 ```
 
 The Gradio interface provides multi-turn conversation support with display sections for item details, styling guides, and alternatives.
+
+## App Demo
+https://www.loom.com/share/61b9a1d6c56846448b147dd0bffa2e9f

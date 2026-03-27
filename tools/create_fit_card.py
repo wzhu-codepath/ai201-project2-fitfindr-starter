@@ -127,6 +127,7 @@ def _llm_fit_copy(
     load_dotenv()
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
+        print("[create_fit_card] ❌ No GROQ_API_KEY found - skipping LLM copywriting")
         return None, "LLM styling unavailable: GROQ_API_KEY is not set. Using deterministic fit-card copy."
 
     if Groq is None:
@@ -188,6 +189,7 @@ def _llm_fit_copy(
     )
 
     try:
+        print(f"[create_fit_card] 🤖 Calling LLM for creative copy (direction: {creative_direction})...")
         client = Groq(api_key=api_key)
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
@@ -200,20 +202,27 @@ def _llm_fit_copy(
             max_tokens=500,
         )
         content = response.choices[0].message.content if response.choices else ""
+        print(f"[create_fit_card] 📝 LLM raw response: {content[:150]}...")
         parsed = _extract_json_object(content)
         if not isinstance(parsed, dict):
+            print("[create_fit_card] ❌ LLM response was not valid JSON")
             return None, "LLM response could not be parsed. Using deterministic fit-card copy."
 
         cards = parsed.get("cards", [])
         if not isinstance(cards, list):
+            print("[create_fit_card] ❌ LLM response missing 'cards' array")
             return None, "LLM response format was incomplete. Using deterministic fit-card copy."
 
         normalized_cards = [card for card in cards if isinstance(card, dict)]
         if not normalized_cards:
+            print("[create_fit_card] ❌ LLM response had no valid cards")
             return None, "LLM response had no valid card options. Using deterministic fit-card copy."
 
-        return random.choice(normalized_cards), None
-    except Exception:
+        selected_card = random.choice(normalized_cards)
+        print(f"[create_fit_card] ✅ LLM card selected: {selected_card.get('fit_title', 'Untitled')}")
+        return selected_card, None
+    except Exception as e:
+        print(f"[create_fit_card] ❌ LLM request failed: {str(e)}")
         return None, "LLM request failed. Using deterministic fit-card copy."
 
 
@@ -306,6 +315,7 @@ def create_fit_card(outfit: dict) -> dict:
         )
 
         if llm_warning and llm_warning not in warnings:
+            print(f"[create_fit_card] ⚠️  {llm_warning}")
             warnings.append(llm_warning)
 
         fit_title = default_title
@@ -313,6 +323,7 @@ def create_fit_card(outfit: dict) -> dict:
         wardrobe_pairings = default_pairings
 
         if isinstance(llm_payload, dict):
+            print("[create_fit_card] 🎨 Using LLM-generated fit card copy")
             raw_title = _safe_str(llm_payload.get("fit_title"))
             raw_recipe = llm_payload.get("style_recipe", [])
             raw_pairings = llm_payload.get("wardrobe_pairings", [])
@@ -329,6 +340,8 @@ def create_fit_card(outfit: dict) -> dict:
                 normalized_pairings = [_safe_str(line) for line in raw_pairings if _safe_str(line)]
                 if normalized_pairings:
                     wardrobe_pairings = normalized_pairings
+        else:
+            print("[create_fit_card] 📝 Using deterministic fit card copy")
 
         return {
             "fit_title": fit_title,
